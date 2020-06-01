@@ -24,6 +24,7 @@ namespace RabbitMQ.Receiver
         /// <returns></returns>
         public static async Task OnReceivePacket(object sender, BasicDeliverEventArgs eventArgs)
         {
+            //Each . represents a wait time of 200ms
             string message = Encoding.UTF8.GetString(eventArgs.Body.ToArray());
             Console.WriteLine(message);
             var count = message.Sum(x => (x == '.' ? 1 : 0));
