@@ -23,8 +23,6 @@ namespace RabbitMQ.Core
         private IBasicProperties _basicProperties;
         IConnection _connection = null;
         private readonly int _noOfConsumers = 1;
-        private ManualResetEventSlim _manualResetEventSlim = new ManualResetEventSlim(true);
-        MessageQueue messageQueue = null;
 
         #endregion Fields    
 
@@ -67,7 +65,6 @@ namespace RabbitMQ.Core
             _basicProperties = Channel.CreateBasicProperties();
             _basicProperties.Persistent = true;
             _basicProperties.DeliveryMode = 2;
-            messageQueue = new MessageQueue(topic, queueName, routingKey);
         }
 
         #endregion Constructors
@@ -101,29 +98,19 @@ namespace RabbitMQ.Core
             try
             {
                 byte[] body = Encoding.UTF8.GetBytes(payload);
-                //MessageQueue messageQueue = null;
-                _manualResetEventSlim.Wait();
-                //Create new queue with prefix same as topic name
-                if (Channel.MessageCount(_queueName) >= Consts.QueueMaxSize - 1)
+                if (Channel.MessageCount(_queueName) >= Consts.QueueMaxSize-1)
                 {
-                    _manualResetEventSlim.Reset();
-                    this.Reset(out messageQueue);
-                    ////to reroute pending messages which are waiting 
-                    routingKey = messageQueue.RoutingKey;
-                    if (Channel.IsOpen)
-                        Channel.BasicPublish($"exchange.{topic}", routingKey, _basicProperties, body);
-                    _manualResetEventSlim.Set();
+                    var serviceProvider = Module.GetServiceProvider();
+                    var eventAggregator = serviceProvider.GetService<IEventAggregator>();
+                    eventAggregator.GetEvent<MaxQueueSizeReachedPubSubEvent>().Publish((_queueName, payload));
                     return;
                 }
-                //to reroute pending messages which are waiting 
-                routingKey = (messageQueue?.RoutingKey) ?? routingKey;
                 var exchange = $"exchange.{topic}";
                 if (Channel.IsOpen)
                     Channel.BasicPublish(exchange, routingKey, _basicProperties, body);
             }
             catch (Exception ex)
             {
-                //Logger.Write(ex);
                 throw;
             }
         }
@@ -194,36 +181,7 @@ namespace RabbitMQ.Core
             _connection = null;
         }
 
-        #region Private methods
-
-        private void Reset(out MessageQueue messageQueue)
-        {
-            this.Clear();
-            var oldQueueName = _queueName;
-            //Get new temporary queueName
-            messageQueue = GenerateTemporaryQueueName();
-            this.CreateQueue(messageQueue.Topic, messageQueue.QueueName, messageQueue.RoutingKey, true);
-            var serviceProvider = Module.GetServiceProvider();
-            var eventAggregator = serviceProvider.GetService<IEventAggregator>();
-            eventAggregator.GetEvent<QueueMaxSizeReachedPubSubEvent>().Publish((oldQueueName, messageQueue));
-        }
-
-        private MessageQueue GenerateTemporaryQueueName()
-        {
-            if (_queueName.StartsWith("tmp"))
-            {
-                var splitResult = _queueName.Split('.');
-                //Parse and increment the routing key
-                var inc = int.Parse(splitResult[0].Substring(3)) + 1;
-                var topic = splitResult[1];
-                var routingKey = inc.ToString();
-                return new MessageQueue(topic, $"tmp{routingKey}.{topic}", routingKey);
-            }
-            return new MessageQueue(_queueName, $"tmp1.{_queueName}", "1");
-        }
-
-        #endregion
-
+       
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
         /// </summary>

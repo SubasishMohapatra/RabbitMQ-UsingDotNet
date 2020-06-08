@@ -5,7 +5,7 @@ using System.Text;
 
 namespace RabbitMQ.Core
 {
-    public class QueueMaxSizeReachedPubSubEvent : PubSubEvent<(string oldQueueName,MessageQueue messageQueue)>
+    public class MaxQueueSizeReachedPubSubEvent : PubSubEvent<(string queueName, string payload)>
     {
     }
 }
