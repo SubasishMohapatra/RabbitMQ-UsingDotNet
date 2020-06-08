@@ -65,7 +65,8 @@ namespace RabbitMQ.Core
                     //Get new temporary queueName
                     _messageQueue = GenerateTemporaryQueueName(queueName);
                     _queueDispatcher = new QueueDispatcher(_messageQueue.Topic, _messageQueue.QueueName, _messageQueue.RoutingKey, true);
-                    _linkedQueues["queueName"] = _messageQueue.QueueName;
+                    //Map oldName with new name(old is key, new is value)
+                    _linkedQueues[queueName] = _messageQueue.QueueName;
                     while (_bufferedMessages.Count > 0)
                     {
                         _bufferedMessages.TryDequeue(out string message);
