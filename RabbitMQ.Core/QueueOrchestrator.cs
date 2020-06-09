@@ -53,12 +53,12 @@ namespace RabbitMQ.Core
             {
                 _bufferedMessages.Enqueue(payload);
                 _linkedQueues.TryAdd(queueName, "");
-                var topic = queueName.StartsWith("tmp") ? queueName.Split('.')[1] : queueName;
-                _queueDispatcher.Publish("Flush", topic);
+                var topic = queueName.StartsWith(Consts.TemporaryQueuePrefix) ? queueName.Split('.')[1] : queueName;
+                _queueDispatcher.Publish(Consts.ClearQueueMessage, topic);
             }
             else
             {
-                if (payload == "Flush")
+                if (payload == Consts.ClearQueueMessage)
                 {
                     _queueDispatcher.Clear();
                     var oldQueueName = queueName;
@@ -82,16 +82,16 @@ namespace RabbitMQ.Core
 
         private MessageQueue GenerateTemporaryQueueName(string queueName)
         {
-            if (queueName.StartsWith("tmp"))
+            if (queueName.StartsWith(Consts.TemporaryQueuePrefix))
             {
                 var splitResult = queueName.Split('.');
                 //Parse and increment the routing key
                 var inc = int.Parse(splitResult[0].Substring(3)) + 1;
                 var topic = splitResult[1];
                 var routingKey = inc.ToString();
-                return new MessageQueue(topic, $"tmp{routingKey}.{topic}", routingKey);
+                return new MessageQueue(topic, $"{Consts.TemporaryQueuePrefix}{routingKey}.{topic}", routingKey);
             }
-            return new MessageQueue(queueName, $"tmp1.{queueName}", "1");
+            return new MessageQueue(queueName, $"{Consts.TemporaryQueuePrefix}1.{queueName}", "1");
         }
 
         public void Publish(string payload, string topic)
