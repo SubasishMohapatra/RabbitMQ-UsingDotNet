@@ -17,7 +17,7 @@ namespace RabbitMQ.Core
     /// <summary>
     /// Basic
     /// </summary>
-    public partial class QueueOrchestrator : IDisposable
+    public partial class QueueDispatchManager : IDisposable
     {
         #region Field declaration
 
@@ -27,23 +27,16 @@ namespace RabbitMQ.Core
         ConcurrentDictionary<string, string> _linkedQueues = new ConcurrentDictionary<string, string>();
         ConcurrentQueue<string> _bufferedMessages = new ConcurrentQueue<string>();
         SubscriptionToken _subscriptionToken = null;
+
         #endregion
 
-        public QueueOrchestrator()
+        public QueueDispatchManager(string topic)
         {
             var serviceProvider = Module.GetServiceProvider();
             var eventAggregator = serviceProvider.GetService<IEventAggregator>();
             _subscriptionToken=eventAggregator.GetEvent<MaxQueueSizeReachedPubSubEvent>().Subscribe((x) => MaxQueueSizeReached(x.queueName, x.payload));
-            _messageQueue = new MessageQueue("Test");
-            _queueDispatcher = new QueueDispatcher("Test");
-        }
-
-        private void QueueFull_Handler(string oldQueueName, MessageQueue messageQueue)
-        {
-            _manualResetEventSlim.Reset();
-            //Reroute messages using new routing key received
-            _messageQueue = messageQueue;
-            _manualResetEventSlim.Set();
+            _messageQueue = new MessageQueue(topic);
+            _queueDispatcher = serviceProvider.GetService<Func<string, string, string, bool, QueueDispatcher>>()(topic, null, "", true);
         }
 
         private void MaxQueueSizeReached(string queueName, string payload)

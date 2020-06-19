@@ -1,11 +1,10 @@
 ﻿using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Prism.Events;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
 using System.Collections.Generic;
-using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace RabbitMQ.Core
@@ -20,6 +19,7 @@ namespace RabbitMQ.Core
         IConnection _connection = null;
         private readonly int _noOfConsumers = 1;
         private bool _disposed = false;
+        private string _queueName;
 
         #endregion
 
@@ -27,6 +27,7 @@ namespace RabbitMQ.Core
 
         public QueueListener(string queueName, AsyncEventHandler<BasicDeliverEventArgs> callback)
         {
+            _queueName = queueName;
             var builder = new ConfigurationBuilder()
                 .AddJsonFile("AppSettings.json");
             var configuration = builder.Build().GetSection("RabbitMQ");
@@ -37,10 +38,10 @@ namespace RabbitMQ.Core
             var connectionFactory = new ConnectionFactory { HostName = queueServer, UserName = queueUsername, Password = queuePassword, DispatchConsumersAsync = true };
             connectionFactory.AutomaticRecoveryEnabled = true;
             connectionFactory.NetworkRecoveryInterval = TimeSpan.FromSeconds(10);
-            _connection = connectionFactory.CreateConnection();
+            _connection = connectionFactory.CreateConnection();            
 
             Channel = _connection.CreateModel();
-            Channel.BasicQos(0, (ushort)(_noOfConsumers * 5), false);
+            Channel.BasicQos(0, (ushort)(_noOfConsumers * 1), false);
             Channel.ContinuationTimeout = new TimeSpan(0, 30, 0);
             this.StartReceive(callback, queueName);
         }
@@ -79,6 +80,12 @@ namespace RabbitMQ.Core
             {
                 await callback(sender, eventArgs);
                 Channel.BasicAck(eventArgs.DeliveryTag, false);
+                if (Channel.MessageCount(_queueName) == 0)
+                {
+                    var serviceProvider = Module.GetServiceProvider();
+                    var eventAggregator = serviceProvider.GetRequiredService<IEventAggregator>();
+                    eventAggregator.GetEvent<MinQueueSizeReachedPubSubEvent>().Publish(_queueName);
+                }
             }
             catch (Exception ex)
             {
@@ -98,6 +105,27 @@ namespace RabbitMQ.Core
                 Channel.BasicNack(eventArgs.DeliveryTag, false, count > 0);
                 //Logger.Write($"RabbitMQ Consume Catch::{ex.Message}", System.Diagnostics.TraceEventType.Error.ToString());
             }
+        }
+
+        public void Clear()
+        {
+            try
+            {
+                if (Channel.IsOpen)
+                    Channel.Close();
+                if (_connection.IsOpen)
+                    _connection.Close();
+            }
+            catch (Exception ex)
+            {
+
+            }
+
+            Channel?.Dispose();
+            _connection?.Dispose();
+            Channel = null;
+            _connection = null;
+            _queueName = null;
         }
 
         #region IDispose implementation

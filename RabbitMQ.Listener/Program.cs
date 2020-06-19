@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Core;
 using System;
@@ -12,7 +13,12 @@ namespace RabbitMQ.Receiver
     {
         static void Main(string[] args)
         {
-            var queueListener = new QueueListener("Test", OnReceivePacket);
+            var services = new ServiceCollection();
+            services.AddCoreService();
+            var serviceProvider = services.BuildServiceProvider();
+            serviceProvider.GetService<Module>();
+            var queueListenerManager = serviceProvider.GetService<Func<string, AsyncEventHandler<BasicDeliverEventArgs>, QueueListenerManager>>()("Test", OnReceivePacket);
+            queueListenerManager.Initialize();
             Console.ReadLine();
         }
 
@@ -28,7 +34,7 @@ namespace RabbitMQ.Receiver
             string message = Encoding.UTF8.GetString(eventArgs.Body.ToArray());
             Console.WriteLine(message);
             var count = message.Sum(x => (x == '.' ? 1 : 0));
-            await Task.Delay((count == 0 ? 1 : count) * 200);
+            //await Task.Delay((count == 0 ? 1 : count) * 200);
         }
     }
 }
