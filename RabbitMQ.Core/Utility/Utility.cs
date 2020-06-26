@@ -16,11 +16,11 @@ namespace RabbitMQ.Core
     /// </summary>
     public partial class Utility
     {
-        public static IEnumerable<Task<HttpResponseMessage>> DeleteQueues(HttpClient httpClient, string virtualHost, string[] queueNames)
+        public async static Task DeleteQueues(HttpClient httpClient, string virtualHost, string[] queueNames)
         {
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-            var queueDeletionTasks = new List<Task<HttpResponseMessage>>(queueNames.Length);
+            var queueDeletionTasks = new List<Task>(queueNames.Length);
             queueDeletionTasks.AddRange(queueNames.Select(queueName =>
             {
                 var deletionTask = httpClient.DeleteAsync(string.Format(CultureInfo.InvariantCulture, "/api/queues/{0}/{1}", virtualHost, queueName));
@@ -28,12 +28,16 @@ namespace RabbitMQ.Core
                 deletionTask.ContinueWith((t, o) => { Console.WriteLine("Failed to delete queue {0}.", queueName); }, null, TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted);
                 return deletionTask;
             }));
-            return queueDeletionTasks;
+            while (queueDeletionTasks.Any())
+            {
+                Task finished = await Task.WhenAny(queueDeletionTasks);
+                queueDeletionTasks.Remove(finished);
+            }
         }
 
-        public static List<Queue> GetQueues(HttpClient httpClient, string virtualHost)
+        public async static Task<List<Queue>> GetQueues(HttpClient httpClient, string virtualHost)
         {
-            var queueResult = httpClient.GetAsync(string.Format(CultureInfo.InvariantCulture, "api/queues/{0}", virtualHost)).Result;
+            var queueResult = await httpClient.GetAsync(string.Format(CultureInfo.InvariantCulture, "api/queues/{0}", virtualHost));
             queueResult.EnsureSuccessStatusCode();
             return JsonConvert.DeserializeObject<List<Queue>>(queueResult.Content.ReadAsStringAsync().Result);
         }

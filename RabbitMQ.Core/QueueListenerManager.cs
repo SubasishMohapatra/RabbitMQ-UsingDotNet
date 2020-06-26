@@ -86,18 +86,18 @@ namespace RabbitMQ.Core
             if (string.Compare(queueName, _queueName, true) != 0)
             {
                 _queueListener.Clear();
-                Utility.DeleteQueues(_httpClient, _virtualHost, new string[] { queueName });
+                Utility.DeleteQueues(_httpClient, _virtualHost, new string[] { queueName }).Wait();
             }
-            var queues = Utility.GetQueues(_httpClient, _virtualHost).Where(x => x.Name.EndsWith($".{_queueName}")).OrderBy(x => x.Name);
-            while ((queues?.Any() ?? false))
-            {
-                if (string.Compare(queues.First().Name, queueName, true) == 0)
-                {
-                    queues = Utility.GetQueues(_httpClient, _virtualHost).Where(x => x.Name.EndsWith($".{_queueName}")).OrderBy(x => x.Name);
-                }
-                else
-                    break;
-            }
+            var queues = Utility.GetQueues(_httpClient, _virtualHost).Result.Where(x => x.Name.EndsWith($".{_queueName}")).OrderBy(x => x.Name);
+            //while ((queues?.Any() ?? false))
+            //{
+            //    if (string.Compare(queues.First().Name, queueName, true) == 0)
+            //    {
+            //        queues = Utility.GetQueues(_httpClient, _virtualHost).Where(x => x.Name.EndsWith($".{_queueName}")).OrderBy(x => x.Name);
+            //    }
+            //    else
+            //        break;
+            //}
             if ((queues?.Any() ?? false))
             {
                 var newQueueName = queues.First().Name;
